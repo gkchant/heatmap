@@ -49,6 +49,7 @@ export default function App() {
   const [powerFilter, setPowerFilter] = useState("all"); // all, red, yellow, green
   const statusOptions = [
     { id: 1, label: "Active" },
+    { id: 2, label: "Inactive" },
     { id: 4, label: "Suspended" },
     { id: 39, label: "Scheduled" },
     { id: 75, label: "Test ONT" },
@@ -100,6 +101,16 @@ export default function App() {
         }
       }
     }
+    const inactive =
+      point.accounts &&
+      point.accounts.some(
+        (acct) =>
+          String(acct.account_status_id) === "2" ||
+          (acct.account_status_text || "").toLowerCase() === "inactive",
+      );
+    const hasStatus =
+      point.accounts &&
+      point.accounts.some((acct) => acct.account_status_id);
     const suspended =
       point.accounts &&
       point.accounts.some(
@@ -108,8 +119,10 @@ export default function App() {
           (acct.account_status_text || "").toLowerCase() === "suspended",
       );
     const hasRunLight = lightEntries.length > 0;
+    if (inactive) return "#111827";
     if (suspended) return "#9333ea";
     if (!completed) return "#9ca3af";
+    if (completed && !hasStatus) return "#2563eb";
     if (hasRunLight) {
       if (!hasLight) return "#dc2626";
       if (lowLight) return "#facc15";
@@ -415,6 +428,9 @@ export default function App() {
     let powerMatch = true;
     if (powerFilter === "red") powerMatch = color === "#dc2626";
     if (powerFilter === "purple") powerMatch = color === "#9333ea";
+    if (powerFilter === "black") powerMatch = color === "#111827";
+    if (powerFilter === "blue") powerMatch = color === "#2563eb";
+    if (powerFilter === "gray") powerMatch = color === "#9ca3af";
     if (powerFilter === "yellow") powerMatch = color === "#facc15";
     if (powerFilter === "green") powerMatch = color === "#16a34a";
     return ontMatch && oltMatch && powerMatch;
@@ -579,6 +595,29 @@ export default function App() {
     return parts.length ? `Filters — ${parts.join(" | ")}` : null;
   })();
 
+  const markerCounts = (() => {
+    const counts = {
+      black: 0,
+      blue: 0,
+      red: 0,
+      yellow: 0,
+      green: 0,
+      gray: 0,
+      purple: 0,
+    };
+    filteredPoints.forEach((point) => {
+      const color = markerColorForPoint(point);
+      if (color === "#111827") counts.black += 1;
+      else if (color === "#2563eb") counts.blue += 1;
+      else if (color === "#dc2626") counts.red += 1;
+      else if (color === "#facc15") counts.yellow += 1;
+      else if (color === "#16a34a") counts.green += 1;
+      else if (color === "#9ca3af") counts.gray += 1;
+      else if (color === "#9333ea") counts.purple += 1;
+    });
+    return `Online: ${counts.green} | Low light: ${counts.yellow} | Offline: ${counts.red} | Suspended: ${counts.purple} | Inactive: ${counts.black} | Drop done no acct: ${counts.blue} | Drop not completed: ${counts.gray}`;
+  })();
+
   return (
     <div className="app">
       <HeaderSection
@@ -586,6 +625,7 @@ export default function App() {
         filterSummary={filterSummary}
         lightEntries={lightEntries}
         points={filteredPoints}
+        markerCounts={markerCounts}
       />
 
       <SearchBar

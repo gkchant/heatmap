@@ -160,10 +160,13 @@ export default function SearchBar({
         style={{ padding: "6px 8px" }}
       >
         <option value="all">All</option>
-        <option value="red">Red markers</option>
-        <option value="purple">Purple markers</option>
-        <option value="yellow">Yellow markers</option>
-        <option value="green">Green markers</option>
+        <option value="red">Red - Offline</option>
+        <option value="purple">Purple - Suspended</option>
+        <option value="black">Black - Inactive</option>
+        <option value="blue">Blue - Drop Completed - No ONT</option>
+        <option value="gray">Gray - Drop not done</option>
+        <option value="yellow">Yellow - Low light</option>
+        <option value="green">Green - Online</option>
       </select>
       <button
         type="button"
