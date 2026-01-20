@@ -1,4 +1,4 @@
-# Leaflet + React starter
+# Leaflet + React Novos Heatmap
 
 Minimal Vite + React setup with a Leaflet map you can extend with more components.
 
@@ -36,3 +36,5 @@ Minimal Vite + React setup with a Leaflet map you can extend with more component
 - The API supports optional map-bounds filtering by passing `minLat`, `maxLat`, `minLng`, `maxLng` query params to `/points`. Without bounds, it now returns all rows with coordinates, so consider bounding queries if the dataset grows further.
 - If your table lacks an `id` column, leave `ID_COLUMN` blank in `.env`; the API will auto-number rows.
 - Example env for `address_data` columns: `ID_COLUMN=address_id`, `CITY_COLUMN=city`, `ADDRESS_COLUMN=line1`, `LAT_COLUMN=latitude`, `LNG_COLUMN=longitude`, `FDA_FDH_COLUMN=fda_fdh`, `DROP_COLUMN=drop`, `SERVICEABLE_COLUMN=serviceable`.
+
+## .env must be created and setup with database uri and olt info
