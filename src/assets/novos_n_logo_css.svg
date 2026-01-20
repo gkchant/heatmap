@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Novos logo">
+  <style>
+    /* Default colors (override in CSS) */
+    .mark { fill: currentColor; }
+    .accent { fill: var(--logo-accent, #2DD4BF); }
+  </style>
+  <path d="M160 368V144c0-17.7 14.3-32 32-32h16c8.5 0 16.6 3.4 22.6 9.4L352 242.8V144c0-17.7 14.3-32 32-32s32 14.3 32 32v224c0 17.7-14.3 32-32 32h-16c-8.5 0-16.6-3.4-22.6-9.4L224 269.2V368c0 17.7-14.3 32-32 32s-32-14.3-32-32z"
+        class="mark" />
+  <rect x="300" y="112" width="48" height="96" rx="24" class="accent" />
+</svg>

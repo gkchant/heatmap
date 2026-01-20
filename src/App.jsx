@@ -31,8 +31,9 @@ const samplePoints = [
 export default function App() {
   const [points, setPoints] = useState([]);
   const [status, setStatus] = useState("idle");
+  const [headerCompact, setHeaderCompact] = useState(false);
   const [statusText, setStatusText] = useState(
-    "Select a city and one or more FDA/FDH values, then search to load markers.",
+    "",
   );
   const [city, setCity] = useState("Arlington");
   const [fdaSelections, setFdaSelections] = useState([]);
@@ -294,14 +295,14 @@ export default function App() {
           setStatusText("No results for that city.");
         } else {
           setStatus("loaded");
-          setStatusText(`Showing ${normalized.length} locations.`);
+        setStatusText("");
         }
         setPoints(normalized);
       })
       .catch((err) => {
         console.error(`Failed to load points from API (${url}).`, err);
         setStatus("error");
-        setStatusText("Could not load points. Showing sample markers.");
+        setStatusText("");
         const sample = samplePoints.map((p) => ({
           id: p.id,
           name: p.name,
@@ -570,31 +571,6 @@ export default function App() {
       });
   };
 
-  const filterSummary = (() => {
-    const parts = [];
-    if (fdaSelections.length) parts.push(`FDA: ${fdaSelections.join(", ")}`);
-    if (fdhSelections.length) parts.push(`FDH: ${fdhSelections.join(", ")}`);
-    if (dropFilter !== "any") {
-      parts.push(
-        `Drop: ${
-          dropFilter === "completed" ? "Completed" : "Not completed"
-        }`,
-      );
-    }
-    if (ontFilter.trim()) parts.push(`ONT contains "${ontFilter.trim()}"`);
-    if (oltFilter.trim()) parts.push(`OLT contains "${oltFilter.trim()}"`);
-    if (powerFilter !== "all") {
-      const label =
-        powerFilter === "red"
-          ? "Red markers"
-          : powerFilter === "yellow"
-            ? "Yellow markers"
-            : "Green markers";
-      parts.push(label);
-    }
-    return parts.length ? `Filters — ${parts.join(" | ")}` : null;
-  })();
-
   const markerCounts = (() => {
     const counts = {
       black: 0,
@@ -618,16 +594,95 @@ export default function App() {
     return `Online: ${counts.green} | Low light: ${counts.yellow} | Offline: ${counts.red} | Suspended: ${counts.purple} | Inactive: ${counts.black} | Drop done no acct: ${counts.blue} | Drop not completed: ${counts.gray}`;
   })();
 
+  const yellowOltAverages = (() => {
+    if (!lightEntries.length) return [];
+    const stats = new Map();
+    const addEntry = (match) => {
+      if (!match) return;
+      const olt = match.olt ?? "n/a";
+      const slot = match.slot ?? "n/a";
+      const port = match.port ?? "n/a";
+      const key = `${olt}|||${slot}|||${port}`;
+      let current = stats.get(key);
+      if (!current) {
+        current = {
+          olt,
+          slot,
+          port,
+          txSum: 0,
+          txCount: 0,
+          rxSum: 0,
+          rxCount: 0,
+          count: 0,
+        };
+        stats.set(key, current);
+      }
+      current.count += 1;
+      const tx = Number(match["tx-power"]);
+      if (!Number.isNaN(tx)) {
+        current.txSum += tx;
+        current.txCount += 1;
+      }
+      const rx = Number(match["rx-power"]);
+      if (!Number.isNaN(rx)) {
+        current.rxSum += rx;
+        current.rxCount += 1;
+      }
+    };
+
+    filteredPoints.forEach((point) => {
+      const color = markerColorForPoint(point);
+      if (color !== "#facc15") return;
+      const seen = new Set();
+      (point.accounts || []).forEach((acct) => {
+        const uniqueKey = `${acct.inventory_model}|||${acct.value}`;
+        if (seen.has(uniqueKey)) return;
+        seen.add(uniqueKey);
+        const match = findLightMatch(lightEntries, acct.value);
+        addEntry(match);
+      });
+    });
+
+    return Array.from(stats.values())
+      .map((entry) => ({
+        olt: entry.olt,
+        slot: entry.slot,
+        port: entry.port,
+        count: entry.count,
+        txAvg: entry.txCount ? entry.txSum / entry.txCount : null,
+        rxAvg: entry.rxCount ? entry.rxSum / entry.rxCount : null,
+      }))
+      .sort((a, b) => {
+        const oltSort = String(a.olt).localeCompare(String(b.olt));
+        if (oltSort) return oltSort;
+        const slotSort = String(a.slot).localeCompare(String(b.slot));
+        if (slotSort) return slotSort;
+        return String(a.port).localeCompare(String(b.port));
+      })
+      .map((entry) => ({
+        ...entry,
+        txAvg: entry.txAvg === null ? "n/a" : entry.txAvg.toFixed(1),
+        rxAvg: entry.rxAvg === null ? "n/a" : entry.rxAvg.toFixed(1),
+      }));
+  })();
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setHeaderCompact(window.scrollY > 80);
+    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <div className="app">
       <HeaderSection
         statusText={statusText}
-        filterSummary={filterSummary}
-        lightEntries={lightEntries}
-        points={filteredPoints}
         markerCounts={markerCounts}
+        yellowOltAverages={yellowOltAverages}
+        compact={headerCompact}
       />
-
       <SearchBar
         city={city}
         setCity={setCity}

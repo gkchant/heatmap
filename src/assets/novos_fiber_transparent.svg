@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="500" viewBox="0 0 1200 500"
+     xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .dark { fill: #143535; font-family: Montserrat, Poppins, Arial, sans-serif; }
+    .accent { fill: #22c1c3; }
+  </style>
+
+  <text x="600" y="200"
+        text-anchor="middle"
+        font-size="160"
+        letter-spacing="20"
+        class="dark">NOVOS</text>
+
+  <text x="600" y="330"
+        text-anchor="middle"
+        font-size="110"
+        letter-spacing="40"
+        class="dark">F B E R</text>
+
+  <rect x="585" y="255" width="18" height="60" rx="9" class="accent"/>
+</svg>

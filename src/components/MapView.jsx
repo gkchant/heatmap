@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { MapContainer, CircleMarker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -36,7 +37,34 @@ const findLightMatch = (entries, cpeValue) => {
   );
 };
 
-export default function MapView({ points, lightEntries, markerColorForPoint }) {
+const buildOltStats = (accounts, lightEntries) => {
+  if (!accounts || accounts.length === 0 || !lightEntries || lightEntries.length === 0) {
+    return [];
+  }
+  const seen = new Set();
+  const stats = new Map();
+  accounts.forEach((acct) => {
+    const uniqueKey = `${acct.inventory_model}|||${acct.value}`;
+    if (seen.has(uniqueKey)) return;
+    seen.add(uniqueKey);
+    const match = findLightMatch(lightEntries, acct.value);
+    if (!match) return;
+    const olt = match.olt ?? "n/a";
+    const slot = match.slot ?? "n/a";
+    const port = match.port ?? "n/a";
+    const statKey = `${olt}|||${slot}|||${port}`;
+    const current = stats.get(statKey);
+    if (current) {
+      current.count += 1;
+    } else {
+      stats.set(statKey, { olt, slot, port, count: 1 });
+    }
+  });
+  return Array.from(stats.values());
+};
+
+const MapView = memo(
+  function MapView({ points, lightEntries, markerColorForPoint }) {
   return (
     <div className="map-shell">
       <MapContainer
@@ -134,6 +162,23 @@ export default function MapView({ points, lightEntries, markerColorForPoint }) {
                     Drop: {point.dropCompleted ? "Completed" : "Not completed"}
                   </>
                 ) : null}
+                {(() => {
+                  const oltStats = buildOltStats(point.accounts, lightEntries);
+                  return oltStats.length ? (
+                    <>
+                      <br />
+                      OLT Summary:
+                      <ul className="account-list">
+                        {oltStats.map((stat) => (
+                          <li key={`${stat.olt}-${stat.slot}-${stat.port}`}>
+                            OLT: {stat.olt} | Slot: {stat.slot} | Port: {stat.port} (
+                            {stat.count})
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null;
+                })()}
                 {point.accounts && point.accounts.length > 0 ? (() => {
                   const grouped = point.accounts.reduce((acc, acct) => {
                     const key = acct.account_id || "unknown";
@@ -239,4 +284,10 @@ export default function MapView({ points, lightEntries, markerColorForPoint }) {
       </MapContainer>
     </div>
   );
-}
+  },
+  (prevProps, nextProps) =>
+    prevProps.points === nextProps.points &&
+    prevProps.lightEntries === nextProps.lightEntries,
+);
+
+export default MapView;

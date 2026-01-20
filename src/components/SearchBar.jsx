@@ -180,30 +180,32 @@ export default function SearchBar({
             Running…
           </span>
         ) : (
-          "Auto Light Level"
+          "Light Level"
         )}
       </button>
-      <label className="checkbox-item" style={{ gap: "6px" }}>
-        <input
-        type="checkbox"
-        checked={autoLightEnabled}
-        onChange={(e) => setAutoLightEnabled(e.target.checked)}
-        disabled={!lightConfig}
-      />
-      Auto light
-    </label>
-      <select
-        value={autoLightSeconds}
-        onChange={(e) => setAutoLightSeconds(Number(e.target.value) || 0)}
-        disabled={!lightConfig || !autoLightEnabled}
-        aria-label="Auto light interval (minutes)"
-        style={{ padding: "6px 8px", width: "110px" }}
-      >
-        <option value={900}>15 min</option>
-        <option value={1800}>30 min</option>
-        <option value={2700}>45 min</option>
-        <option value={3600}>60 min</option>
-      </select>
+      <div className="auto-light-row">
+        <label className="checkbox-item" style={{ gap: "6px" }}>
+          <input
+            type="checkbox"
+            checked={autoLightEnabled}
+            onChange={(e) => setAutoLightEnabled(e.target.checked)}
+            disabled={!lightConfig}
+          />
+          Auto
+        </label>
+        <select
+          value={autoLightSeconds}
+          onChange={(e) => setAutoLightSeconds(Number(e.target.value) || 0)}
+          disabled={!lightConfig || !autoLightEnabled}
+          aria-label="Auto light interval (minutes)"
+          style={{ padding: "6px 8px", width: "110px" }}
+        >
+          <option value={900}>15 min</option>
+          <option value={1800}>30 min</option>
+          <option value={2700}>45 min</option>
+          <option value={3600}>60 min</option>
+        </select>
+      </div>
     </form>
   );
 }
