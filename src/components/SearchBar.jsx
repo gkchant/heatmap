@@ -30,6 +30,8 @@ export default function SearchBar({
   setOltFilter,
   powerFilter,
   setPowerFilter,
+  onExport,
+  exportDisabled,
 }) {
   return (
     <form
@@ -139,7 +141,15 @@ export default function SearchBar({
       </select>
       <button type="submit" disabled={status === "loading"}>
         {status === "loading" ? "Searching…" : "Search"}
-        </button>
+      </button>
+      <button
+        type="button"
+        className="light-button"
+        onClick={onExport}
+        disabled={exportDisabled}
+      >
+        Export CSV
+      </button>
       <input
         type="text"
         placeholder="ONT search"

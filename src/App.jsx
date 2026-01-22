@@ -591,8 +591,307 @@ export default function App() {
       else if (color === "#9ca3af") counts.gray += 1;
       else if (color === "#9333ea") counts.purple += 1;
     });
-    return `Online: ${counts.green} | Low light: ${counts.yellow} | Offline: ${counts.red} | Suspended: ${counts.purple} | Inactive: ${counts.black} | Drop done no acct: ${counts.blue} | Drop not completed: ${counts.gray}`;
+    return `Online CPE: ${counts.green} | Low light: ${counts.yellow} | Offline: ${counts.red} | Suspended: ${counts.purple} | Inactive: ${counts.black} | Drop done no acct: ${counts.blue} | Drop not completed: ${counts.gray}`;
   })();
+
+  const buildOltStatsForPoint = (accounts) => {
+    if (!accounts || accounts.length === 0 || lightEntries.length === 0) {
+      return [];
+    }
+    const seen = new Set();
+    const stats = new Map();
+    accounts.forEach((acct) => {
+      const uniqueKey = `${acct.inventory_model}|||${acct.value}`;
+      if (seen.has(uniqueKey)) return;
+      seen.add(uniqueKey);
+      const match = findLightMatch(lightEntries, acct.value);
+      if (!match) return;
+      const olt = match.olt ?? "n/a";
+      const slot = match.slot ?? "n/a";
+      const port = match.port ?? "n/a";
+      const statKey = `${olt}|||${slot}|||${port}`;
+      const current = stats.get(statKey);
+      if (current) {
+        current.count += 1;
+      } else {
+        stats.set(statKey, { olt, slot, port, count: 1 });
+      }
+    });
+    return Array.from(stats.values());
+  };
+
+  const buildPopupText = (point) => {
+    const lines = [];
+    const pushIf = (value) => {
+      if (value) lines.push(value);
+    };
+    const pushBlank = () => {
+      if (lines.length > 0 && lines[lines.length - 1] !== "") {
+        lines.push("");
+      }
+    };
+
+    pushIf(point.name);
+    pushIf(point.addressId ? `Address ID: ${point.addressId}` : "");
+    pushIf(point.line1);
+    pushIf(point.line2);
+    if (point.fdaFdh) {
+      if (point.fdaFdh.includes("|")) {
+        const [fdaPart, fdhPart] = point.fdaFdh.split("|");
+        pushIf(
+          `FDA: ${fdaPart.replace("FDA:", "")} | FDH: ${fdhPart.replace("FDH:", "")}`,
+        );
+      } else {
+        pushIf(`FDA: ${point.fdaFdh}`);
+      }
+    }
+    if (point.dropCompleted !== undefined) {
+      pushIf(`Drop: ${point.dropCompleted ? "Completed" : "Not completed"}`);
+    }
+
+    const oltStats = buildOltStatsForPoint(point.accounts);
+    if (oltStats.length) {
+      pushBlank();
+      lines.push("OLT Summary:");
+      lines.push("");
+      oltStats.forEach((stat) => {
+        lines.push(`    OLT: ${stat.olt} | Slot: ${stat.slot} | Port: ${stat.port} (${stat.count})`);
+      });
+    }
+
+    if (point.accounts && point.accounts.length > 0) {
+      const grouped = point.accounts.reduce((acc, acct) => {
+        const key = acct.account_id || "unknown";
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(acct);
+        return acc;
+      }, {});
+      const groupedArr = Object.entries(grouped).map(
+        ([accountId, items]) => ({
+          accountId,
+          items,
+        }),
+      );
+      groupedArr.forEach((group) => {
+        pushBlank();
+        lines.push(`Account ID: ${group.accountId}`);
+        if (group.items[0]?.account_status_id) {
+          lines.push(
+            `Account Status: ${group.items[0].account_status_text || group.items[0].account_status_id}`,
+          );
+        }
+        lines.push("CPE:");
+        lines.push("");
+        const unique = [];
+        const seen = new Set();
+        group.items.forEach((item) => {
+          const key = `${item.inventory_model}|||${item.value}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(item);
+          }
+        });
+        unique.forEach((item) => {
+          lines.push(`    ${item.inventory_model}: ${item.value}`);
+          const match = findLightMatch(lightEntries, item.value);
+          if (match) {
+            lines.push(`    OLT: ${match.olt || "n/a"}`);
+            lines.push(`    OLT Slot: ${match.slot}`);
+            lines.push(`    Port: ${match.port}`);
+            lines.push(`    RX @ OLT: ${match["rx-power-olt"] ?? "n/a"} dBm`);
+            lines.push(`    Fiber distance: ${match["fiber-distance"] ?? "n/a"} km`);
+            lines.push(`    TX power: ${match["tx-power"] ?? "n/a"} dBm`);
+            lines.push(`    RX power: ${match["rx-power"] ?? "n/a"} dBm`);
+            lines.push(`    TX bias current: ${match["tx-bias-current"] ?? "n/a"} mA`);
+            lines.push(
+              `    TX bias temp: ${match["tx-bias-temperature"] ?? "n/a"} °C`,
+            );
+            lines.push(
+              `    Module voltage: ${match["module-voltage"] ?? "n/a"} V`,
+            );
+            lines.push(
+              `    Module temp: ${match["module-temperature"] ?? "n/a"} °C`,
+            );
+            lines.push("");
+          } else {
+            lines.push("");
+          }
+        });
+        while (lines.length > 0 && lines[lines.length - 1] === "") {
+          lines.pop();
+        }
+      });
+    } else {
+      pushBlank();
+      lines.push("CPE:");
+      lines.push("");
+      lines.push("    n/a");
+    }
+
+    if (point.latitude && point.longitude) {
+      pushBlank();
+      lines.push(`Lat/Lng: ${point.latitude}, ${point.longitude}`);
+    }
+    return lines.join("\r\n");
+  };
+
+  const buildCpeColumns = (point) => {
+    const accounts = point.accounts || [];
+    if (accounts.length === 0) {
+      return {
+        account_id: "",
+        cpe_model: "",
+        cpe_value: "",
+        olt: "",
+        olt_slot: "",
+        olt_port: "",
+        rx_power_olt_dbm: "",
+        fiber_distance_km: "",
+        tx_power_dbm: "",
+        rx_power_dbm: "",
+        tx_bias_current_ma: "",
+        tx_bias_temp_c: "",
+        module_voltage_v: "",
+        module_temp_c: "",
+      };
+    }
+    const seen = new Set();
+    let first = null;
+    for (const item of accounts) {
+      const key = `${item.inventory_model}|||${item.value}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        first = item;
+        break;
+      }
+    }
+    if (!first) {
+      return {
+        account_id: "",
+        cpe_model: "",
+        cpe_value: "",
+        olt: "",
+        olt_slot: "",
+        olt_port: "",
+        rx_power_olt_dbm: "",
+        fiber_distance_km: "",
+        tx_power_dbm: "",
+        rx_power_dbm: "",
+        tx_bias_current_ma: "",
+        tx_bias_temp_c: "",
+        module_voltage_v: "",
+        module_temp_c: "",
+      };
+    }
+    const match = findLightMatch(lightEntries, first.value);
+    return {
+      account_id: first.account_id ?? "",
+      cpe_model: first.inventory_model ?? "",
+      cpe_value: first.value ?? "",
+      olt: match?.olt ?? "",
+      olt_slot: match?.slot ?? "",
+      olt_port: match?.port ?? "",
+      rx_power_olt_dbm: match?.["rx-power-olt"] ?? "",
+      fiber_distance_km: match?.["fiber-distance"] ?? "",
+      tx_power_dbm: match?.["tx-power"] ?? "",
+      rx_power_dbm: match?.["rx-power"] ?? "",
+      tx_bias_current_ma: match?.["tx-bias-current"] ?? "",
+      tx_bias_temp_c: match?.["tx-bias-temperature"] ?? "",
+      module_voltage_v: match?.["module-voltage"] ?? "",
+      module_temp_c: match?.["module-temperature"] ?? "",
+    };
+  };
+
+  const markerLabelForColor = (color) => {
+    if (color === "#111827") return "black";
+    if (color === "#2563eb") return "blue";
+    if (color === "#dc2626") return "red";
+    if (color === "#facc15") return "yellow";
+    if (color === "#16a34a") return "green";
+    if (color === "#9ca3af") return "gray";
+    if (color === "#9333ea") return "purple";
+    return "unknown";
+  };
+
+  const exportMarkersToCsv = () => {
+    if (!filteredPoints.length) return;
+    const headers = [
+      "marker_color",
+      "name",
+      "address_id",
+      "line1",
+      "line2",
+      "fda_fdh",
+      "drop_completed",
+      "latitude",
+      "longitude",
+      "account_id",
+      "cpe_model",
+      "cpe_value",
+      "olt",
+      "olt_slot",
+      "olt_port",
+      "rx_power_olt_dbm",
+      "fiber_distance_km",
+      "tx_power_dbm",
+      "rx_power_dbm",
+      "tx_bias_current_ma",
+      "tx_bias_temp_c",
+      "module_voltage_v",
+      "module_temp_c",
+    ];
+    const escapeCsv = (value) => {
+      if (value === null || value === undefined) return "";
+      const str = String(value);
+      const escaped = str.replace(/"/g, '""');
+      return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+    };
+    const rows = filteredPoints.map((point) => {
+      const color = markerColorForPoint(point);
+      const cpe = buildCpeColumns(point);
+      return [
+        markerLabelForColor(color),
+        point.name ?? "",
+        point.addressId ?? "",
+        point.line1 ?? "",
+        point.line2 ?? "",
+        point.fdaFdh ?? "",
+        point.dropCompleted !== undefined ? String(point.dropCompleted) : "",
+        point.latitude ?? "",
+        point.longitude ?? "",
+        cpe.account_id,
+        cpe.cpe_model,
+        cpe.cpe_value,
+        cpe.olt,
+        cpe.olt_slot,
+        cpe.olt_port,
+        cpe.rx_power_olt_dbm,
+        cpe.fiber_distance_km,
+        cpe.tx_power_dbm,
+        cpe.rx_power_dbm,
+        cpe.tx_bias_current_ma,
+        cpe.tx_bias_temp_c,
+        cpe.module_voltage_v,
+        cpe.module_temp_c,
+      ];
+    });
+    const csv = [headers, ...rows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\..+/, "");
+    link.href = url;
+    link.download = `markers-export-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const yellowOltAverages = (() => {
     if (!lightEntries.length) return [];
@@ -729,6 +1028,8 @@ export default function App() {
         setOltFilter={setOltFilter}
         powerFilter={powerFilter}
         setPowerFilter={setPowerFilter}
+        onExport={exportMarkersToCsv}
+        exportDisabled={filteredPoints.length === 0}
       />
 
       <MapView
