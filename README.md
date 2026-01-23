@@ -21,6 +21,16 @@ Minimal Vite + React setup with a Leaflet map you can extend with more component
    - If you changed the API port, tell the frontend where to fetch: `VITE_API_URL=http://localhost:3002/points npm run dev`
 5. Open the printed localhost URL (defaults to http://localhost:5173).
 
+## Microsoft SSO setup
+
+1. Add these values to `.env`:
+   - `VITE_MSAL_CLIENT_ID=...`
+   - `VITE_MSAL_TENANT_ID=...`
+   - `VITE_MSAL_REDIRECT_URI=http://localhost:5173` (or your deployed URL)
+2. In the Azure app registration, add the redirect URI you use above as a SPA.
+3. Run `npm install` to get the MSAL packages (if you have not already).
+4. Start the dev server and sign in when prompted.
+
 ## Project structure
 
 - `server.js` – small Express API that reads from Postgres (configurable columns for `address_data`).

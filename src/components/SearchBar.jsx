@@ -20,6 +20,15 @@ export default function SearchBar({
   handleLightLevel,
   lightConfig,
   lightLoading,
+  manualOlt,
+  setManualOlt,
+  manualSlot,
+  setManualSlot,
+  manualPorts,
+  setManualPorts,
+  manualOltOptions,
+  manualSlotOptions,
+  handleManualLightLevel,
   autoLightEnabled,
   setAutoLightEnabled,
   autoLightSeconds,
@@ -193,6 +202,62 @@ export default function SearchBar({
           "Light Level"
         )}
       </button>
+      <div className="manual-light">
+        <span className="muted" style={{ fontWeight: 600 }}>
+          Manual light:
+        </span>
+        <select
+          value={manualOlt}
+          onChange={(e) => setManualOlt(e.target.value)}
+          disabled={!lightConfig}
+          aria-label="OLT"
+          style={{ minWidth: "160px", padding: "6px 8px" }}
+        >
+          {manualOltOptions.length === 0 ? (
+            <option value="">No OLTs</option>
+          ) : (
+            manualOltOptions.map((olt) => (
+              <option key={olt} value={olt}>
+                {olt}
+              </option>
+            ))
+          )}
+        </select>
+        <select
+          value={manualSlot}
+          onChange={(e) => setManualSlot(e.target.value)}
+          disabled={!lightConfig}
+          aria-label="Line card"
+          style={{ minWidth: "100px", padding: "6px 8px" }}
+        >
+          {manualSlotOptions.length === 0 ? (
+            <option value="">No slots</option>
+          ) : (
+            manualSlotOptions.map((slot) => (
+              <option key={slot} value={slot}>
+                {slot}
+              </option>
+            ))
+          )}
+        </select>
+        <input
+          type="text"
+          placeholder="Ports (e.g. 1-4,7,9-12)"
+          value={manualPorts}
+          onChange={(e) => setManualPorts(e.target.value)}
+          disabled={!lightConfig}
+          aria-label="Ports"
+          style={{ minWidth: "190px", padding: "6px 8px" }}
+        />
+        <button
+          type="button"
+          className="light-button"
+          onClick={handleManualLightLevel}
+          disabled={!lightConfig || lightLoading}
+        >
+          Run Manual
+        </button>
+      </div>
       <div className="auto-light-row">
         <label className="checkbox-item" style={{ gap: "6px" }}>
           <input

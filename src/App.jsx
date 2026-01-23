@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import "./index.css";
 import HeaderSection from "./components/HeaderSection";
 import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
+import { loginRequest } from "./authConfig";
 const apiUrl =
   import.meta.env.VITE_API_URL || "http://localhost:4500/points";
 
@@ -29,6 +31,11 @@ const samplePoints = [
 ];
 
 export default function App() {
+  const { instance, accounts } = useMsal();
+  const isAuthenticated = useIsAuthenticated();
+  const hasClientId = Boolean(import.meta.env.VITE_MSAL_CLIENT_ID);
+  const activeAccount =
+    instance.getActiveAccount() || (accounts.length ? accounts[0] : null);
   const [points, setPoints] = useState([]);
   const [status, setStatus] = useState("idle");
   const [headerCompact, setHeaderCompact] = useState(false);
@@ -62,10 +69,46 @@ export default function App() {
   const [lightLoading, setLightLoading] = useState(false);
   const [autoLightEnabled, setAutoLightEnabled] = useState(false);
   const [autoLightSeconds, setAutoLightSeconds] = useState(900); // default 15 minutes
+  const [manualOlt, setManualOlt] = useState("");
+  const [manualSlot, setManualSlot] = useState("");
+  const [manualPorts, setManualPorts] = useState("");
   const autoLightTimer = useRef(null);
   const fdaRef = useRef(null);
   const fdhRef = useRef(null);
   const statusRef = useRef(null);
+
+  useEffect(() => {
+    if (!instance.getActiveAccount() && accounts.length > 0) {
+      instance.setActiveAccount(accounts[0]);
+    }
+  }, [accounts, instance]);
+
+  useEffect(() => {
+    const allowed = allowedOltsByCity(city, lightConfig?.olts || []);
+    if (allowed.length > 0 && !allowed.includes(manualOlt)) {
+      setManualOlt(allowed[0]);
+    }
+  }, [city, lightConfig, manualOlt]);
+
+  useEffect(() => {
+    const slots = lightConfig?.slots || [];
+    if (slots.length > 0 && !slots.includes(manualSlot)) {
+      setManualSlot(slots[0]);
+    }
+  }, [lightConfig, manualSlot]);
+
+  const handleLogin = () => {
+    if (!hasClientId) return;
+    instance.loginRedirect(loginRequest).catch((err) => {
+      console.error("Microsoft login failed", err);
+    });
+  };
+
+  const handleLogout = () => {
+    instance.logoutRedirect().catch((err) => {
+      console.error("Microsoft logout failed", err);
+    });
+  };
   // Normalize CPE/optic identifiers for matching: lowercase and strip anything after "_".
   const normalizeCpeName = (value) => {
     if (!value) return "";
@@ -137,6 +180,36 @@ export default function App() {
     if (cityName === "McKinney") return olts.filter((o) => o.startsWith("DFW3-"));
     if (cityName === "Rockwall") return olts.filter((o) => o.startsWith("DFW4-"));
     return olts;
+  };
+
+  const buildPortRange = (minPort, maxPort) => {
+    const min = Number.isFinite(minPort) ? minPort : 1;
+    const max = Number.isFinite(maxPort) ? maxPort : min;
+    const ports = [];
+    for (let p = min; p <= max; p++) ports.push(p);
+    return ports;
+  };
+
+  const parsePortInput = (value, minPort, maxPort) => {
+    if (!value || !value.trim()) return [];
+    const min = Number.isFinite(minPort) ? minPort : 1;
+    const max = Number.isFinite(maxPort) ? maxPort : min;
+    const ports = new Set();
+    const parts = value.split(/[,\s]+/).filter(Boolean);
+    parts.forEach((part) => {
+      const range = part.split("-").map((v) => Number(v));
+      if (range.length === 2 && Number.isFinite(range[0]) && Number.isFinite(range[1])) {
+        const start = Math.min(range[0], range[1]);
+        const end = Math.max(range[0], range[1]);
+        for (let p = start; p <= end; p++) {
+          if (p >= min && p <= max) ports.add(p);
+        }
+      } else if (range.length === 1 && Number.isFinite(range[0])) {
+        const port = range[0];
+        if (port >= min && port <= max) ports.add(port);
+      }
+    });
+    return Array.from(ports).sort((a, b) => a - b);
   };
 
   const normalizeFda = (value) => {
@@ -456,8 +529,7 @@ export default function App() {
       });
   }, []);
 
-  const handleLightLevel = (e) => {
-    e?.preventDefault();
+  const runLightLevel = (oltsToUse, slotsToUse, portsToUse, label) => {
     const originFromApi = (() => {
       try {
         return new URL(apiUrl).origin;
@@ -465,20 +537,14 @@ export default function App() {
         return window.location.origin;
       }
     })();
-    const allOlts = allowedOltsByCity(city, lightConfig?.olts || []);
-    const oltsToUse = allOlts;
-    const slotsToUse = lightConfig?.slots || [];
-    const portsToUse = [];
-    const min = lightConfig?.minPort || 1;
-    const max = lightConfig?.maxPort || 16;
-    for (let p = min; p <= max; p++) portsToUse.push(p);
     if (oltsToUse.length === 0 || slotsToUse.length === 0 || portsToUse.length === 0) {
       setLightStatus("No allowed OLT/slot/port combos for this city.");
       return;
     }
 
     const comboCount = oltsToUse.length * slotsToUse.length * portsToUse.length;
-    setLightStatus(`Loading light level for ${comboCount} combo(s)...`);
+    const labelPrefix = label ? `${label} ` : "";
+    setLightStatus(`Loading ${labelPrefix}light level for ${comboCount} combo(s)...`);
     setLightLoading(true);
     const tasksPayloads = [];
     oltsToUse.forEach((o) => {
@@ -570,6 +636,30 @@ export default function App() {
         setLightLoading(false);
       });
   };
+
+  const handleLightLevel = (e) => {
+    e?.preventDefault();
+    const allOlts = allowedOltsByCity(city, lightConfig?.olts || []);
+    const slotsToUse = lightConfig?.slots || [];
+    const min = lightConfig?.minPort || 1;
+    const max = lightConfig?.maxPort || 16;
+    const portsToUse = buildPortRange(min, max);
+    runLightLevel(allOlts, slotsToUse, portsToUse, "");
+  };
+
+  const handleManualLightLevel = () => {
+    const allOlts = allowedOltsByCity(city, lightConfig?.olts || []);
+    const slotsToUse = manualSlot ? [manualSlot] : lightConfig?.slots || [];
+    const min = lightConfig?.minPort || 1;
+    const max = lightConfig?.maxPort || 16;
+    const parsedPorts = parsePortInput(manualPorts, min, max);
+    const portsToUse = parsedPorts.length > 0 ? parsedPorts : buildPortRange(min, max);
+    const oltsToUse = manualOlt ? [manualOlt] : allOlts;
+    runLightLevel(oltsToUse, slotsToUse, portsToUse, "Manual");
+  };
+
+  const manualOltOptions = allowedOltsByCity(city, lightConfig?.olts || []);
+  const manualSlotOptions = lightConfig?.slots || [];
 
   const markerCounts = (() => {
     const counts = {
@@ -974,8 +1064,43 @@ export default function App() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  if (!isAuthenticated) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card">
+          <h1>Sign in</h1>
+          <p>Use your Microsoft account to access the map.</p>
+          {!hasClientId ? (
+            <p className="auth-warning">
+              Missing `VITE_MSAL_CLIENT_ID` in your `.env` file.
+            </p>
+          ) : null}
+          <button
+            className="auth-button"
+            type="button"
+            onClick={handleLogin}
+            disabled={!hasClientId}
+          >
+            Sign in with Microsoft
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
+      <div className="auth-bar">
+        <div className="auth-user">
+          <span className="auth-label">Signed in</span>
+          <span className="auth-name">
+            {activeAccount?.name || activeAccount?.username || "User"}
+          </span>
+        </div>
+        <button className="secondary-button" type="button" onClick={handleLogout}>
+          Sign out
+        </button>
+      </div>
       <HeaderSection
         statusText={statusText}
         markerCounts={markerCounts}
@@ -1018,6 +1143,15 @@ export default function App() {
         handleLightLevel={handleLightLevel}
         lightConfig={lightConfig}
         lightLoading={lightLoading}
+        manualOlt={manualOlt}
+        setManualOlt={setManualOlt}
+        manualSlot={manualSlot}
+        setManualSlot={setManualSlot}
+        manualPorts={manualPorts}
+        setManualPorts={setManualPorts}
+        manualOltOptions={manualOltOptions}
+        manualSlotOptions={manualSlotOptions}
+        handleManualLightLevel={handleManualLightLevel}
         autoLightEnabled={autoLightEnabled}
         setAutoLightEnabled={setAutoLightEnabled}
         autoLightSeconds={autoLightSeconds}
