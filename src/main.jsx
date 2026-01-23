@@ -8,12 +8,18 @@ import "./index.css";
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
-msalInstance.handleRedirectPromise().finally(() => {
-  ReactDOM.createRoot(document.getElementById("root")).render(
-    <React.StrictMode>
-      <MsalProvider instance={msalInstance}>
-        <App />
-      </MsalProvider>
-    </React.StrictMode>,
-  );
-});
+msalInstance
+  .initialize()
+  .then(() => msalInstance.handleRedirectPromise())
+  .catch((err) => {
+    console.error("MSAL init failed", err);
+  })
+  .finally(() => {
+    ReactDOM.createRoot(document.getElementById("root")).render(
+      <React.StrictMode>
+        <MsalProvider instance={msalInstance}>
+          <App />
+        </MsalProvider>
+      </React.StrictMode>,
+    );
+  });
