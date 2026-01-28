@@ -48,3 +48,73 @@ Minimal Vite + React setup with a Leaflet map you can extend with more component
 - Example env for `address_data` columns: `ID_COLUMN=address_id`, `CITY_COLUMN=city`, `ADDRESS_COLUMN=line1`, `LAT_COLUMN=latitude`, `LNG_COLUMN=longitude`, `FDA_FDH_COLUMN=fda_fdh`, `DROP_COLUMN=drop`, `SERVICEABLE_COLUMN=serviceable`.
 
 ## .env must be created and setup with database uri and olt info
+
+## Deploying to another server
+
+### Frontend API base (required)
+- Set `VITE_API_URL` to the *base* API URL (include `/api`), for example:
+  - `VITE_API_URL=https://YOUR_DOMAIN/api`
+- The frontend appends endpoints like `/points`, `/fda-options`, `/fdh-options`, `/light-config`, `/light-level` to this base.
+- After changing `.env`, restart the dev server or rebuild the production bundle (Vite reads env at start/build time).
+
+### Backend ports
+- Default API port is `3001` (see `server.js`).
+- If you change the API port, update your reverse proxy config (nginx) to point at the new port.
+
+### Light-level endpoint behavior
+- `POST /api/light-level` can take a long time when many OLT/slot/port combos are requested.
+- If you see `504 Gateway Time-out` from nginx, increase proxy timeouts (see below).
+
+## Nginx setup (reverse proxy)
+
+### Example site config (Vite dev on 5173, API on 3001)
+```
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name YOUR_DOMAIN;
+
+    ssl_certificate     /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Vite dev server
+    location / {
+        proxy_pass http://127.0.0.1:5173;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # API (note the trailing slash)
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+
+        # Increase timeouts for long light-level calls
+        proxy_connect_timeout 120s;
+        proxy_send_timeout 1200s;
+        proxy_read_timeout 1200s;
+    }
+}
+```
+
+### Validate and reload nginx
+```
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Common locations for nginx configs (Rocky Linux)
+- `/etc/nginx/nginx.conf`
+- `/etc/nginx/conf.d/*.conf`

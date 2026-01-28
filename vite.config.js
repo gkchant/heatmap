@@ -5,5 +5,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    allowedHosts: ['heatmap-nov.duckdns.org'], // add domain url
   },
 });

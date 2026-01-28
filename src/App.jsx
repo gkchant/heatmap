@@ -6,7 +6,7 @@ import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import { loginRequest } from "./authConfig";
 const apiUrl =
-  import.meta.env.VITE_API_URL || "http://localhost:4500/points";
+  import.meta.env.VITE_API_URL || "https://heatmap-nov.duckdns.org/api"; // "http://localhost:4500/points"; 
 
 // Fallback sample points if API fails.
 const samplePoints = [
@@ -262,7 +262,8 @@ export default function App() {
       .filter(Boolean);
     try {
       const u = new URL(apiUrl);
-      u.pathname = path;
+      // Preserve any base pathname like "/api" and append the endpoint.
+      u.pathname = `${u.pathname.replace(/\/$/, "")}${path}`;
       u.search = "";
       if (cityFilter && cityFilter.trim().length > 0) {
         u.searchParams.set("city", cityFilter.trim());
@@ -275,7 +276,7 @@ export default function App() {
       statusNormalized.forEach((v) => u.searchParams.append("status", v));
       url = u.toString();
     } catch (e) {
-      url = apiUrl.replace(/\/points.*/, path);
+      url = apiUrl.replace(/\/$/, "") + path;
       const parts = [];
       if (cityFilter && cityFilter.trim().length > 0) {
         parts.push(`city=${encodeURIComponent(cityFilter.trim())}`);
@@ -511,14 +512,15 @@ export default function App() {
   });
 
   useEffect(() => {
-    const originFromApi = (() => {
+    const lightConfigUrl = (() => {
       try {
-        return new URL(apiUrl).origin;
+        const u = new URL(apiUrl);
+        return `${u.origin}${u.pathname.replace(/\/$/, "")}/light-config`;
       } catch {
-        return window.location.origin;
+        return `${apiUrl.replace(/\/$/, "")}/light-config`;
       }
     })();
-    fetch(`${originFromApi}/light-config`)
+    fetch(lightConfigUrl)
       .then((res) => res.json())
       .then((cfg) => {
         setLightConfig(cfg);
@@ -530,11 +532,12 @@ export default function App() {
   }, []);
 
   const runLightLevel = (oltsToUse, slotsToUse, portsToUse, label) => {
-    const originFromApi = (() => {
+    const lightLevelUrl = (() => {
       try {
-        return new URL(apiUrl).origin;
+        const u = new URL(apiUrl);
+        return `${u.origin}${u.pathname.replace(/\/$/, "")}/light-level`;
       } catch {
-        return window.location.origin;
+        return `${apiUrl.replace(/\/$/, "")}/light-level`;
       }
     })();
     if (oltsToUse.length === 0 || slotsToUse.length === 0 || portsToUse.length === 0) {
@@ -556,7 +559,7 @@ export default function App() {
     });
 
     const runTask = (payload) =>
-      fetch(`${originFromApi}/light-level`, {
+      fetch(lightLevelUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
